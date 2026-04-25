@@ -6,7 +6,7 @@ const express = require('express');
 const cors = require('cors');
 
 // ======================
-// 🗄️ SUPABASE
+// 🔗 SUPABASE
 // ======================
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -26,24 +26,29 @@ const client = new Client({
   partials: [Partials.Channel]
 });
 
+let botOnline = false;
+
 client.once('ready', () => {
   console.log(`Bot online como ${client.user.tag}`);
+  botOnline = true;
 });
 
+// ======================
 // 🔐 GERAR CÓDIGO
+// ======================
 function gerarCodigo(tipo) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let sufixo = '';
 
   for (let i = 0; i < 4; i++) {
-    sufixo += chars.charAt(Math.floor(Math.random() * chars.length));
+    sufixo += chars[Math.floor(Math.random() * chars.length)];
   }
 
   return `SAI-${tipo}-${sufixo}`;
 }
 
 // ======================
-// 📩 DISCORD COMANDOS
+// 📩 DISCORD COMMANDS
 // ======================
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
@@ -92,7 +97,7 @@ client.on('messageCreate', async (message) => {
       return message.reply('Use: !usar SAI-PILOT-XXXX');
     }
 
-    const input = codeInput.toUpperCase().trim();
+    const input = codeInput.toUpperCase();
 
     const { data } = await supabase
       .from('codes')
@@ -115,26 +120,28 @@ client.on('messageCreate', async (message) => {
 });
 
 // ======================
-// 🌐 API EXPRESS
+// 🌐 EXPRESS API
 // ======================
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🟢 ROOT (corrige UptimeRobot 404)
-app.get('/', (req, res) => {
-  res.status(200).json({
-    status: 'online',
-    service: 'SAI API'
-  });
-});
-
-// 🩺 HEALTH CHECK (melhor para monitoramento)
+// HEALTH CHECK
 app.get('/health', (req, res) => {
-  res.status(200).json({ ok: true });
+  res.json({ ok: true });
 });
 
-// 🔎 VERIFICAR CÓDIGO
+// BOT STATUS
+app.get('/bot-status', (req, res) => {
+  res.json({ bot: botOnline ? 'online' : 'offline' });
+});
+
+// PING (anti-sleep monitor)
+app.get('/ping', (req, res) => {
+  res.json({ ok: true });
+});
+
+// VALIDAR CÓDIGO VIA API
 app.post('/verificar', async (req, res) => {
   const { code } = req.body;
 
@@ -142,7 +149,7 @@ app.post('/verificar', async (req, res) => {
     return res.json({ valid: false });
   }
 
-  const input = code.toUpperCase().trim();
+  const input = code.toUpperCase();
 
   const { data } = await supabase
     .from('codes')
@@ -167,7 +174,7 @@ app.post('/verificar', async (req, res) => {
 });
 
 // ======================
-// 🚀 START SERVIDOR
+// 🚀 START SERVER
 // ======================
 const PORT = process.env.PORT || 3000;
 
@@ -175,5 +182,4 @@ app.listen(PORT, () => {
   console.log(`API rodando na porta ${PORT}`);
 });
 
-// 🤖 LOGIN DISCORD
 client.login(process.env.DISCORD_TOKEN);
