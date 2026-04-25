@@ -10,7 +10,7 @@ const cors = require('cors');
 // ======================
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 // ======================
@@ -43,7 +43,7 @@ function gerarCodigo(tipo) {
 }
 
 // ======================
-// 📩 COMANDOS DISCORD
+// 📩 DISCORD COMMANDS
 // ======================
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
@@ -84,7 +84,7 @@ client.on('messageCreate', async (message) => {
     return message.reply('Código enviado na DM!');
   }
 
-  // VALIDAR NO DISCORD
+  // VALIDAR CÓDIGO
   if (message.content.startsWith('!usar')) {
     const codeInput = message.content.split(' ')[1];
 
@@ -115,13 +115,12 @@ client.on('messageCreate', async (message) => {
 });
 
 // ======================
-// 🌐 API (SITE)
+// 🌐 API EXPRESS
 // ======================
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ENDPOINT
 app.post('/verificar', async (req, res) => {
   const { code } = req.body;
 
@@ -154,10 +153,12 @@ app.post('/verificar', async (req, res) => {
 });
 
 // ======================
-// 🚀 START
+// 🚀 START SERVER
 // ======================
-app.listen(3000, () => {
-  console.log('API rodando em http://localhost:3000');
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`API rodando na porta ${PORT}`);
 });
 
 client.login(process.env.DISCORD_TOKEN);
