@@ -6,7 +6,7 @@ const express = require('express');
 const cors = require('cors');
 
 // ======================
-// 🔗 SUPABASE
+// 🗄️ SUPABASE
 // ======================
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -43,7 +43,7 @@ function gerarCodigo(tipo) {
 }
 
 // ======================
-// 📩 DISCORD COMMANDS
+// 📩 DISCORD COMANDOS
 // ======================
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
@@ -69,14 +69,14 @@ client.on('messageCreate', async (message) => {
     const { error } = await supabase.from('codes').insert([
       {
         user_id: user.id,
-        code: code,
+        code,
         type: tipoUpper,
         used: false
       }
     ]);
 
     if (error) {
-      console.error("ERRO:", error);
+      console.error(error);
       return message.reply('Erro ao salvar no banco.');
     }
 
@@ -92,7 +92,7 @@ client.on('messageCreate', async (message) => {
       return message.reply('Use: !usar SAI-PILOT-XXXX');
     }
 
-    const input = codeInput.trim().toUpperCase();
+    const input = codeInput.toUpperCase().trim();
 
     const { data } = await supabase
       .from('codes')
@@ -121,6 +121,20 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// 🟢 ROOT (corrige UptimeRobot 404)
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'online',
+    service: 'SAI API'
+  });
+});
+
+// 🩺 HEALTH CHECK (melhor para monitoramento)
+app.get('/health', (req, res) => {
+  res.status(200).json({ ok: true });
+});
+
+// 🔎 VERIFICAR CÓDIGO
 app.post('/verificar', async (req, res) => {
   const { code } = req.body;
 
@@ -128,7 +142,7 @@ app.post('/verificar', async (req, res) => {
     return res.json({ valid: false });
   }
 
-  const input = code.trim().toUpperCase();
+  const input = code.toUpperCase().trim();
 
   const { data } = await supabase
     .from('codes')
@@ -153,7 +167,7 @@ app.post('/verificar', async (req, res) => {
 });
 
 // ======================
-// 🚀 START SERVER
+// 🚀 START SERVIDOR
 // ======================
 const PORT = process.env.PORT || 3000;
 
@@ -161,4 +175,5 @@ app.listen(PORT, () => {
   console.log(`API rodando na porta ${PORT}`);
 });
 
+// 🤖 LOGIN DISCORD
 client.login(process.env.DISCORD_TOKEN);
