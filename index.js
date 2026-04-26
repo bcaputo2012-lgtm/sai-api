@@ -1,185 +1,84 @@
 require('dotenv').config();
 
-const { Client, GatewayIntentBits, Partials } = require('discord.js');
+const { Client, GatewayIntentBits } = require('discord.js');
 const { createClient } = require('@supabase/supabase-js');
-const express = require('express');
-const cors = require('cors');
 
-// ======================
-// 🔗 SUPABASE
-// ======================
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
+});
+
+// 🔐 CONFIG
+const OWNER_ID = "1208789344534667334";
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// ======================
-// 🤖 DISCORD BOT
-// ======================
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.DirectMessages
-  ],
-  partials: [Partials.Channel]
-});
-
-let botOnline = false;
-
-client.once('ready', () => {
-  console.log(`Bot online como ${client.user.tag}`);
-  botOnline = true;
-});
-
-// ======================
-// 🔐 GERAR CÓDIGO
-// ======================
+// 🔑 GERAR CÓDIGO
 function gerarCodigo(tipo) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let sufixo = '';
-
-  for (let i = 0; i < 4; i++) {
-    sufixo += chars[Math.floor(Math.random() * chars.length)];
-  }
-
-  return `SAI-${tipo}-${sufixo}`;
+  const random = Math.random().toString(36).substring(2, 7).toUpperCase();
+  return `SAI-${tipo}-${random}`;
 }
 
-// ======================
-// 📩 DISCORD COMMANDS
-// ======================
+// 🚀 BOT READY
+client.once('ready', () => {
+  console.log(`Bot online como ${client.user.tag}`);
+});
+
+// 💬 COMANDOS
 client.on('messageCreate', async (message) => {
+
   if (message.author.bot) return;
 
-  // GERAR CÓDIGO
+  // =========================
+  // 🔒 COMANDO !verificar
+  // =========================
   if (message.content.startsWith('!verificar')) {
+
+    // 🔐 BLOQUEIO (SÓ VOCÊ)
+    if (message.author.id !== OWNER_ID) {
+      return message.reply("❌ Apenas o dono pode usar este comando.");
+    }
+
     const args = message.content.split(' ');
-    const tipo = args[1];
-    const user = message.mentions.users.first();
+    const tipo = args[1]?.toUpperCase();
 
-    if (!tipo || !user) {
-      return message.reply('Use: !verificar PILOT/ATC/GND @usuario');
+    if (!["ATC", "PILOT", "GND"].includes(tipo)) {
+      return message.reply("❌ Use: !verificar ATC | PILOT | GND");
     }
 
-    const tipoUpper = tipo.toUpperCase();
+    const codigo = gerarCodigo(tipo);
 
-    if (!['PILOT', 'ATC', 'GND'].includes(tipoUpper)) {
-      return message.reply('Tipo inválido!');
-    }
-
-    const code = gerarCodigo(tipoUpper);
-
-    const { error } = await supabase.from('codes').insert([
-      {
-        user_id: user.id,
-        code,
-        type: tipoUpper,
-        used: false
-      }
-    ]);
+    // 💾 SALVAR NO SUPABASE
+    const { error } = await supabase
+      .from('codes')
+      .insert([
+        {
+          code: codigo,
+          type: tipo,
+          used: false
+        }
+      ]);
 
     if (error) {
-      console.error(error);
-      return message.reply('Erro ao salvar no banco.');
+      console.log(error);
+      return message.reply("❌ Erro ao gerar código.");
     }
 
-    await user.send(`Seu código SAI:\n\n${code}`);
-    return message.reply('Código enviado na DM!');
-  }
-
-  // VALIDAR CÓDIGO
-  if (message.content.startsWith('!usar')) {
-    const codeInput = message.content.split(' ')[1];
-
-    if (!codeInput) {
-      return message.reply('Use: !usar SAI-PILOT-XXXX');
+    try {
+      // 📩 MANDA NA DM
+      await message.author.send(`✅ Seu código (${tipo}):\n\n${codigo}`);
+      message.reply("📩 Código enviado na sua DM!");
+    } catch {
+      message.reply("❌ Não consegui te mandar DM. Ative mensagens privadas.");
     }
-
-    const input = codeInput.toUpperCase();
-
-    const { data } = await supabase
-      .from('codes')
-      .select('*')
-      .eq('code', input)
-      .eq('used', false)
-      .maybeSingle();
-
-    if (!data) {
-      return message.reply('Código inválido ❌');
-    }
-
-    await supabase
-      .from('codes')
-      .update({ used: true })
-      .eq('code', input);
-
-    return message.reply(`Código válido ✅ | Tipo: ${data.type}`);
-  }
-});
-
-// ======================
-// 🌐 EXPRESS API
-// ======================
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-// HEALTH CHECK
-app.get('/health', (req, res) => {
-  res.json({ ok: true });
-});
-
-// BOT STATUS
-app.get('/bot-status', (req, res) => {
-  res.json({ bot: botOnline ? 'online' : 'offline' });
-});
-
-// PING (anti-sleep monitor)
-app.get('/ping', (req, res) => {
-  res.json({ ok: true });
-});
-
-// VALIDAR CÓDIGO VIA API
-app.post('/verificar', async (req, res) => {
-  const { code } = req.body;
-
-  if (!code) {
-    return res.json({ valid: false });
   }
 
-  const input = code.toUpperCase();
-
-  const { data } = await supabase
-    .from('codes')
-    .select('*')
-    .eq('code', input)
-    .eq('used', false)
-    .maybeSingle();
-
-  if (!data) {
-    return res.json({ valid: false });
-  }
-
-  await supabase
-    .from('codes')
-    .update({ used: true })
-    .eq('code', input);
-
-  return res.json({
-    valid: true,
-    type: data.type
-  });
-});
-
-// ======================
-// 🚀 START SERVER
-// ======================
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(`API rodando na porta ${PORT}`);
 });
 
 client.login(process.env.DISCORD_TOKEN);
